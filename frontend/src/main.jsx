@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import ReactMarkdown from 'react-markdown';
 import { ArrowUp, Box, ChevronDown, ChevronRight, Cloud, Database, HardDrive, Layers,
   LoaderCircle, Menu, Network, Paperclip, Plus, RefreshCw, Search,
-  Server, ShieldCheck, Sparkles, X, ExternalLink, AlertCircle } from 'lucide-react';
+  Server, ShieldCheck, Sparkles, X, ExternalLink, AlertCircle, Sun, Moon } from 'lucide-react';
 import { askCloud, connectAWS, connectionPath, getInventory, getResource } from './api';
 import { contextFor, parseAnswer, parseInventory, resourceKey, services, verifiedReference, isResource } from './resources';
 import './style.css';
@@ -73,6 +73,18 @@ function ResourceDrawer({ resource, close, attach }) {
 }
 
 function App() {
+  const [darkMode, setDarkMode] = useState(() => {
+    try {
+      const saved = localStorage.getItem('recon-ai-theme');
+      if (saved === 'dark' || saved === 'light') return saved === 'dark';
+    } catch { /* Theme still works when browser storage is unavailable. */ }
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+  useEffect(() => {
+    document.documentElement.style.colorScheme = darkMode ? 'dark' : 'light';
+    try { localStorage.setItem('recon-ai-theme', darkMode ? 'dark' : 'light'); }
+    catch { /* Storage may be disabled; retain the preference for this session. */ }
+  }, [darkMode]);
   const [inventory, setInventory] = useState([]);
   const [supported, setSupported] = useState([]);
   const [inventoryLoading, setInventoryLoading] = useState(true);
@@ -133,10 +145,10 @@ function App() {
   }
   const ready = !inventoryLoading && !inventoryError;
 
-  return <div className={`cloud-app${sidebar ? ' sidebar-open' : ''}${selected ? ' has-drawer' : ''}`}>
+  return <div className={`cloud-app${darkMode ? ' dark-mode' : ''}${sidebar ? ' sidebar-open' : ''}${selected ? ' has-drawer' : ''}`}>
     {sidebar && <button className="sidebar-backdrop" onClick={() => setSidebar(false)} aria-label="Close infrastructure explorer"/>}
     <aside className="infrastructure-sidebar" aria-label="AWS infrastructure explorer">
-      <a className="brand" href="./"><span className="brand-cube"><Box size={25}/></span><span>RECON <b>AI</b><small>CLOUD INTELLIGENCE</small></span></a>
+      <a className="brand" href="./"><span className="brand-cube"><img className="app-emblem" src="/recon-cloud-search.png" alt=""/></span><span>RECON <b>AI</b><small>CLOUD INTELLIGENCE</small></span></a>
       <button className="new-chat" disabled={sending} onClick={() => { setMessages([]); setChatError(''); setPrompt(''); setAttachments([]); }}><Plus size={17}/>New conversation</button>
       <div className="explorer-title"><h2>Infrastructure</h2><button className="icon-button" onClick={() => setReload(n => n + 1)} disabled={inventoryLoading || sending} aria-label="Refresh inventory"><RefreshCw size={15} className={inventoryLoading ? 'spin' : ''}/></button></div>
       <label className="resource-search"><Search size={15}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search resources..." aria-label="Search AWS resources"/></label>
@@ -159,9 +171,9 @@ function App() {
     </aside>
 
     <div className="chat-workspace">
-      <header className="chat-header"><div className="header-title"><button className="icon-button" onClick={() => setSidebar(!sidebar)} aria-label="Toggle infrastructure explorer" aria-expanded={sidebar}><Menu size={20}/></button><div><h1>Cloud Resource Optimizer</h1><p>Understand, analyze, and optimize your AWS infrastructure using AI.</p></div></div><span className="preview-badge">Preview</span></header>
+      <header className="chat-header"><div className="header-title"><button className="icon-button" onClick={() => setSidebar(!sidebar)} aria-label="Toggle infrastructure explorer" aria-expanded={sidebar}><Menu size={20}/></button><div><h1>Cloud Resource Optimizer</h1><p>Understand, analyze, and optimize your AWS infrastructure using AI.</p></div></div><div className="header-actions"><span className="preview-badge">Preview</span><button type="button" className="icon-button theme-toggle" onClick={() => setDarkMode(value => !value)} aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'} title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'} aria-pressed={darkMode}>{darkMode ? <Sun size={19}/> : <Moon size={19}/>}</button></div></header>
       <main className="conversation">
-        {!messages.length ? <div className="welcome"><div className="welcome-icon"><Box size={35}/><span><Sparkles size={16}/></span></div><span className="welcome-eyebrow">YOUR INFRASTRUCTURE. IN CONTEXT.</span><h2>A clearer view of your cloud.</h2><p>Ask a question, explore a resource, or find your next opportunity to optimize.</p><div className="suggestions">{suggestions.map((question, index) => <button key={question} onClick={() => { setPrompt(question); composer.current?.focus(); }}><span>{index % 2 ? <Sparkles size={17}/> : <Layers size={17}/>}</span>{question}<ChevronRight size={15}/></button>)}</div><p className="welcome-hint"><Paperclip size={14}/>Select a resource in the explorer to add context to your question.</p></div> : <div className="message-list">{messages.map((message, index) => <article className={`message ${message.role}`} key={index}><div className="message-avatar">{message.role === 'assistant' ? <Box size={18}/> : 'You'}</div><div className="message-body"><span className="message-author">{message.role === 'assistant' ? 'Cloud assistant' : 'You'}</span>{message.role === 'assistant' ? <Answer answer={message.answer} inventory={inventory} inspect={setSelected}/> : <><p className="user-text">{message.content}</p><div className="message-resources">{message.resources.map(resource => <span key={resourceKey(resource)}><Box size={12}/>{resource.resource_id} · {resource.region}</span>)}</div></>}</div></article>)}</div>}
+        {!messages.length ? <div className="welcome"><div className="welcome-icon"><img className="app-emblem" src="/recon-cloud-search.png" alt=""/><span><Sparkles size={16}/></span></div><span className="welcome-eyebrow">YOUR INFRASTRUCTURE. IN CONTEXT.</span><h2>A clearer view of your cloud.</h2><p>Ask a question, explore a resource, or find your next opportunity to optimize.</p><div className="suggestions">{suggestions.map((question, index) => <button key={question} onClick={() => { setPrompt(question); composer.current?.focus(); }}><span>{index % 2 ? <Sparkles size={17}/> : <Layers size={17}/>}</span>{question}<ChevronRight size={15}/></button>)}</div><p className="welcome-hint"><Paperclip size={14}/>Select a resource in the explorer to add context to your question.</p></div> : <div className="message-list">{messages.map((message, index) => <article className={`message ${message.role}`} key={index}><div className="message-avatar">{message.role === 'assistant' ? <img className="app-emblem" src="/recon-cloud-search.png" alt=""/> : 'You'}</div><div className="message-body"><span className="message-author">{message.role === 'assistant' ? 'Cloud assistant' : 'You'}</span>{message.role === 'assistant' ? <Answer answer={message.answer} inventory={inventory} inspect={setSelected}/> : <><p className="user-text">{message.content}</p><div className="message-resources">{message.resources.map(resource => <span key={resourceKey(resource)}><Box size={12}/>{resource.resource_id} · {resource.region}</span>)}</div></>}</div></article>)}</div>}
         {sending && <div role="status" className="assistant-loading"><LoaderCircle size={16} className="spin"/>Waiting for the cloud backend…</div>}<div ref={end}/>
       </main>
       <div className="composer-dock">

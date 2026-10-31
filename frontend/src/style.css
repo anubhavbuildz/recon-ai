@@ -4,3 +4,55 @@
 @media(max-width:1100px){.header-title>.icon-button{display:inline-flex}.infrastructure-sidebar{position:fixed;top:0;bottom:0;left:0;z-index:30;width:280px;transform:translateX(-100%);transition:transform .2s}.sidebar-open .infrastructure-sidebar{transform:translateX(0)}.sidebar-open .sidebar-backdrop{display:block;position:fixed;inset:0;border:0;background:#182b4a33;backdrop-filter:blur(2px);z-index:29}.chat-header{padding:20px 24px}.welcome{margin-top:6vh}.resource-drawer{width:320px}}
 @media(max-width:700px){.chat-header{padding:15px;min-height:76px}.header-title h1{font-size:14px}.header-title p{font-size:10px;max-width:250px}.preview-badge{display:none}.conversation{padding:20px}.welcome{margin-top:4vh}.welcome h2{font-size:28px}.welcome>p{font-size:12px}.suggestions{grid-template-columns:1fr;gap:8px;margin-top:26px}.suggestions button{padding:12px;font-size:11px}.welcome .welcome-hint{font-size:10px;text-align:left;align-items:flex-start}.composer-dock{padding:10px 14px 12px}.keyboard-hint{display:none}.send-button{margin-left:auto!important}.composer-footnote{font-size:8px}.resource-drawer{position:fixed;right:0;top:0;bottom:0;width:min(100%,380px);box-shadow:-20px 0 80px #10234d33}.attachment-chip small{display:none}.message{gap:10px}.welcome-eyebrow{font-size:8px}.backend-notice{font-size:9px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition:none!important;scroll-behavior:auto!important}}
+
+/* Theme covers every surface, including mobile overlays and resource details. */
+.header-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.theme-toggle { width: 34px; height: 34px; }
+.dark-mode { color-scheme: dark; color: #e0e8f5; background: #0d1422; }
+.dark-mode .infrastructure-sidebar { background: #101a2b; border-color: #24324a; }
+.dark-mode .chat-workspace { background: radial-gradient(ellipse at 50% 40%, #14223a, #0d1422 75%); }
+.dark-mode .brand, .dark-mode .welcome h2 { color: #e5edfa; }
+.dark-mode .brand b, .dark-mode .text-button { color: #75aaff; }
+.dark-mode .brand-cube, .dark-mode .welcome-icon { background: linear-gradient(140deg, #203b62, #162b49); color: #79afff; border-color: #304b71; }
+.dark-mode .welcome-icon > span { background: #192b44; border-color: #304b71; }
+.dark-mode .new-chat, .dark-mode .connect-button, .dark-mode .suggestions button { background: #17243a; border-color: #2b3b55; color: #c2d0e6; box-shadow: none; }
+.dark-mode .new-chat:hover, .dark-mode .suggestions button:hover, .dark-mode .icon-button:hover { background: #233754; color: #a3c5ff; }
+.dark-mode .resource-search { background: #1c2b42; color: #a4b6d1; }
+.dark-mode .resource-search input, .dark-mode .composer textarea { color: #e1eafa; }
+.dark-mode .explorer-title h2, .dark-mode .brand small, .dark-mode .sidebar-state, .dark-mode .sidebar-state > svg,
+.dark-mode .connection-label, .dark-mode .connection-card p, .dark-mode .read-only, .dark-mode .category-empty,
+.dark-mode .resource-item, .dark-mode .header-title p, .dark-mode .welcome > p, .dark-mode .welcome-eyebrow,
+.dark-mode .backend-notice, .dark-mode .composer-footnote, .dark-mode .attach-action, .dark-mode .keyboard-hint,
+.dark-mode .icon-button, .dark-mode .drawer-heading, .dark-mode .resource-id, .dark-mode .identity dt,
+.dark-mode .muted, .dark-mode .loading-line, .dark-mode .detail-values dt, .dark-mode .assistant-loading { color: #a1b1ca; }
+.dark-mode .sidebar-state h3, .dark-mode .category-toggle, .dark-mode .resource-item-name,
+.dark-mode .message-author, .dark-mode .drawer-scroll h3, .dark-mode .answer-content { color: #c3d0e4; }
+.dark-mode .category-toggle .count, .dark-mode .preview-badge { background: #20314b; color: #a9bddd; border-color: #30435f; }
+.dark-mode .resource-item { border-color: #2c3c55; }
+.dark-mode .resource-item:hover, .dark-mode .resource-item.active { background: #203657; border-left-color: #71a8ff; }
+.dark-mode .resource-item.active .resource-item-name { color: #91bdff; }
+.dark-mode .connection-card, .dark-mode .chat-header, .dark-mode .drawer-heading,
+.dark-mode .drawer-scroll section, .dark-mode .drawer-footer, .dark-mode .evidence { border-color: #26354e; }
+.dark-mode .suggestions button > span, .dark-mode .message-avatar, .dark-mode .resource-large-icon,
+.dark-mode .service-tag { background: #203757; color: #8ebaff; }
+.dark-mode .composer-dock { background: linear-gradient(#0d142200, #0d1422 15%); }
+.dark-mode .composer { background: #172338; border-color: #344660; box-shadow: 0 5px 25px #0002; }
+.dark-mode .composer:focus-within { border-color: #6297ec; box-shadow: 0 0 0 3px #2a4b753d; }
+.dark-mode .composer textarea::placeholder, .dark-mode .resource-search input::placeholder { color: #97a9c4; }
+.dark-mode .attachment-chip, .dark-mode .resource-reference { background: #1e3659; border-color: #355581; color: #9dc3ff; }
+.dark-mode .attachment-chip small, .dark-mode .attachment-chip button { color: #a8bfdf; }
+.dark-mode .message-resources span, .dark-mode .answer-content pre { background: #1b2b43; color: #b3c6e3; }
+.dark-mode .answer-content a { color: #89b8ff; }
+.dark-mode .unverified-reference { color: #d2bd94; }
+.dark-mode .limitations { background: #322a1e; border-color: #57482c; color: #e3c996; }
+.dark-mode .limitations h3 { color: #e3c996; }
+.dark-mode .evidence { color: #aebfda; }
+.dark-mode .chat-error { background: #36232d; border-color: #65404b; color: #f0aeb6; }
+.dark-mode .resource-drawer { background: #121d2f; border-color: #2a3b55; box-shadow: -10px 0 30px #0002; }
+.dark-mode .inline-error { color: #e8b291; }
+.dark-mode .sidebar-backdrop { background: #0008; }
+
+.app-emblem { display: block; width: 100%; height: 100%; object-fit: contain; }
+.brand-cube .app-emblem { width: 36px; height: 40px; }
+.welcome-icon .app-emblem { width: 52px; height: 56px; }
+.message-avatar .app-emblem { width: 25px; height: 28px; }

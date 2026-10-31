@@ -97,7 +97,7 @@ npm run dev
 
 Open the printed local URL (normally <http://127.0.0.1:5173>). Keep the backend running. To produce static assets, run `npm run build`; output is `frontend/dist/`. This repository is a local development scaffold; hosting is not configured.
 
-The responsive frontend provides a collapsible AWS infrastructure explorer, search, a conversational welcome state, a multiline composer, persistent resource attachments, and a resource detail drawer. Suggested questions populate the composer. Responses support Markdown, explicit structured resource references verified against discovered inventory, evidence details, limitations, and labeled savings assumptions.
+The responsive frontend provides a collapsible AWS infrastructure explorer, search, a conversational welcome state, a multiline composer, persistent resource attachments, and a resource detail drawer. Suggested questions populate the composer. A header toggle switches between light and dark mode; the initial theme follows your system preference and your selection is saved in browser storage when available. Responses support Markdown, explicit structured resource references verified against discovered inventory, evidence details, limitations, and labeled savings assumptions.
 
 **Integration status:** the current backend has no AWS connection, inventory, resource detail, or cloud chat endpoints. The UI displays an integration-unavailable state and disables sending until inventory is available. No resource lists, metrics, or AI responses are fabricated. The existing `submitRecon()` client and backend endpoints remain intact, although the cloud interface does not display the former target form.
 
