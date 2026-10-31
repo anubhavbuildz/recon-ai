@@ -1,10 +1,10 @@
 # Recon AI
 
-A minimal foundation for a multi-agent AI cybersecurity reconnaissance platform. This version connects a React form to a FastAPI API and a single-node LangGraph workflow. Every valid submission returns `not_executed`: no scanning, intelligence collection, model invocation, or fabricated findings occur.
+A minimal backend foundation for a multi-agent AI cybersecurity reconnaissance platform, with an infrastructure-aware Cloud Resource Optimizer frontend. The frontend now provides a conversational AWS explorer and resource detail drawer; AWS and chat backend integrations are not implemented. The existing reconnaissance API and single-node LangGraph workflow remain available and return `not_executed`: no scanning, intelligence collection, model invocation, or fabricated findings occur.
 
 ## Stack
 
-Python 3.12+, FastAPI, Pydantic 2, LangGraph, an optional OpenAI-compatible Python client, Uvicorn, python-dotenv, and pytest. The frontend uses React with JavaScript and Vite (Node.js 20.19+ or 22.12+). No database, queue, authentication, or Docker setup is included.
+Python 3.12+, FastAPI, Pydantic 2, LangGraph, an optional OpenAI-compatible Python client, Uvicorn, python-dotenv, and pytest. The frontend uses React with JavaScript, Lucide icons, react-markdown, and Vite (Node.js 20.19+ or 22.12+). No database, queue, authentication, or Docker setup is included.
 
 ## Project structure
 
@@ -23,16 +23,21 @@ recon-ai/
 │   │       │   ├── base/{__init__.py,client.py}
 │   │       │   └── workflow/{__init__.py,graph.py}
 │   │       ├── agent/{__init__.py,orchestrator.py,recon_agent.py}
-│   │       └── tools/{__init__.py,registry.py,policy.py}
+│   │       ├── tools/{__init__.py,registry.py,policy.py}
+│   │       └── provide/
+│   │           ├── __init__.py
+│   │           └── aws/{__init__.py,base.py}
 │   ├── tests/{test_health.py,test_recon.py}
 │   ├── .env.example
 │   └── pyproject.toml
 ├── frontend/
-│   ├── src/{main.jsx,api.js,style.css}
+│   ├── src/{main.jsx,api.js,resources.js,style.css}
+│   ├── tests/resources.test.js
 │   ├── .env.example
 │   ├── index.html
 │   ├── package.json
 │   └── package-lock.json
+├── docs/{architecture.md,cloud-api-contract.md}
 ├── .gitignore
 ├── attributes.md
 ├── security.md
@@ -47,6 +52,7 @@ See the [Mermaid class and module diagrams](docs/architecture.md) for the curren
 - `service/llm/workflow`: typed LangGraph state and one compiled agent node returning a structured placeholder result.
 - `service/agent`: the orchestrator invokes the graph; the initial recon agent inspects registry metadata and returns `ReconResponse` with an empty agents list.
 - `service/tools`: immutable tool metadata and a deny-all policy interface. There are no executable handlers or shell interfaces.
+- `service/provide/aws`: scaffold for the future AWS provider. `base.py` contains only a module docstring, ready for implementation. It is not connected to routes or workflows and adds no AWS SDK dependency or cloud functionality.
 
 ```mermaid
 flowchart TD
@@ -91,7 +97,11 @@ npm run dev
 
 Open the printed local URL (normally <http://127.0.0.1:5173>). Keep the backend running. To produce static assets, run `npm run build`; output is `frontend/dist/`. This repository is a local development scaffold; hosting is not configured.
 
-The form displays pending, completed, and error states. A completed request still explicitly displays `not_executed` and the backend's message.
+The responsive frontend provides a collapsible AWS infrastructure explorer, search, a conversational welcome state, a multiline composer, persistent resource attachments, and a resource detail drawer. Suggested questions populate the composer. Responses support Markdown, explicit structured resource references verified against discovered inventory, evidence details, limitations, and labeled savings assumptions.
+
+**Integration status:** the current backend has no AWS connection, inventory, resource detail, or cloud chat endpoints. The UI displays an integration-unavailable state and disables sending until inventory is available. No resource lists, metrics, or AI responses are fabricated. The existing `submitRecon()` client and backend endpoints remain intact, although the cloud interface does not display the former target form.
+
+See [Cloud API contracts](docs/cloud-api-contract.md) for endpoint configuration, payloads, security boundaries, and missing capabilities. Configure optional cloud paths using `frontend/.env.example`; the Connect AWS action requires a real authorized backend connection endpoint. Run `npm test` inside `frontend/` for contract tests.
 
 ## Environment configuration
 
@@ -184,3 +194,5 @@ Agents have no arbitrary shell access. The placeholder graph uses no LLM key and
 Meta Muse is the intended future AI integration for Recon AI. The optional OpenAI-compatible client provides a starting point, but no Meta Muse endpoint, model, or credential has been configured or tested. Meta Muse is not operational in this boilerplate, and the current workflow performs no AI analysis.
 
 See [credits and acknowledgments](attributes.md) for Meta Muse, OpenAI Codex, and GitHub Copilot credits, and the [security policy](security.md) for security boundaries and vulnerability reporting.
+
+Frontend optimizer validation: **7 contract tests passed** and the production build passed. All **57 backend tests** still pass. Live AWS and browser journeys remain unverified; see the cloud API contract for missing backend capabilities.

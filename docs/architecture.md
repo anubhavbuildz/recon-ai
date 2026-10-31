@@ -1,10 +1,12 @@
 # Architecture diagrams
 
-These diagrams describe the current boilerplate. The workflow returns `not_executed`; tools and the optional LLM client are not invoked.
+These diagrams describe the backend reconnaissance boilerplate. The current frontend is a Cloud Resource Optimizer; see [Cloud API contracts](cloud-api-contract.md) for its separate, currently unimplemented backend integration. The frontend portion of the module diagram below represents the preserved reconnaissance client rather than the current screen. The workflow returns `not_executed`; tools and the optional LLM client are not invoked.
 
 ## Class diagram
 
 Only actual Python classes and types are shown. The orchestrator and recon agent are modules containing async functions, so they appear in the module diagram below.
+
+`service/provide/aws/base.py` is a module scaffold with no classes or implementation, so it appears only in the module diagram. Its package files are `service/provide/__init__.py` and `service/provide/aws/__init__.py`.
 
 ```mermaid
 classDiagram
@@ -104,6 +106,10 @@ flowchart TB
             SDK["OpenAI-compatible SDK client"]
         end
 
+        subgraph Providers["service/provide"]
+            AWS["aws/base.py: scaffold only, implementation pending"]
+        end
+
         MAIN --> ROUTES
         MAIN -.-> CONFIG
         ROUTES --> SCHEMAS
@@ -126,3 +132,5 @@ flowchart TB
 ```
 
 API responses return through the same call chain to the React form. The policy module is a future execution boundary and is not called by the placeholder agent. No request-flow module calls `LLMClient`, and no tool execution handler exists.
+
+The AWS provider scaffold is intentionally disconnected: no routes, agents, or workflows import it yet. AWS authentication, inventory, details, and cloud chat remain unimplemented.
