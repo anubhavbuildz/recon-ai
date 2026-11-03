@@ -1,4 +1,5 @@
 """Public API contracts and purely syntactic target validation (no DNS)."""
+
 import ipaddress
 import re
 from typing import Literal
@@ -43,10 +44,19 @@ class ReconRequest(BaseModel):
             raise ValueError("IP literals are not allowed")
         # ASCII DNS names only; Unicode domains must be supplied as punycode.
         labels = host.split(".")
-        if (len(host) > 253 or len(labels) < 2 or host.endswith(".localhost")
-                or not re.fullmatch(r"[a-z][a-z0-9-]*", labels[-1])
-                or any(not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label) for label in labels)):
-            raise ValueError("Enter a valid public domain name; localhost is not allowed")
+        if (
+            len(host) > 253
+            or len(labels) < 2
+            or host.endswith(".localhost")
+            or not re.fullmatch(r"[a-z][a-z0-9-]*", labels[-1])
+            or any(
+                not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label)
+                for label in labels
+            )
+        ):
+            raise ValueError(
+                "Enter a valid public domain name; localhost is not allowed"
+            )
         return host
 
 
@@ -55,3 +65,21 @@ class ReconResponse(BaseModel):
     status: Literal["not_executed"] = "not_executed"
     message: str = "Reconnaissance tools are not configured yet."
     agents: list[str] = Field(default_factory=list)
+
+
+class ChatRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    question: str = Field(min_length=1, max_length=12000)
+
+    @field_validator("question")
+    @classmethod
+    def nonempty_question(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Question must not be blank")
+        return value.strip()
+
+
+class ChatResponse(BaseModel):
+    message: str
+    source: str
+    sources: list[str] = Field(default_factory=list)
