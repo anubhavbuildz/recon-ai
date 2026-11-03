@@ -33,13 +33,13 @@ test('chat response preserves explicit tokens and validates evidence and savings
   assert.equal(parseAnswer({ ...answer, savings: [{ amount: '$10/month', is_estimate: true, assumptions: ['Stable workload'] }] }).savings[0].is_estimate, true);
 });
 
-test('question, canonical context and follow-up history are sent to backend', async t => {
+test('document chat sends the backend question contract', async t => {
   const history = [{ role: 'user', content: 'Earlier question', resources: [contextFor(resource)] }];
   t.mock.method(globalThis, 'fetch', async (url, options) => {
-    assert.ok(url.endsWith('/api/v1/cloud/chat'));
+    assert.ok(url.endsWith('/api/v1/chat'));
     assert.equal(options.method, 'POST');
-    assert.equal(options.credentials, 'include');
-    assert.deepEqual(JSON.parse(options.body), { question: 'Analyze this', resources: [contextFor(resource)], messages: history });
+    assert.equal(options.credentials, 'omit');
+    assert.deepEqual(JSON.parse(options.body), { question: 'Analyze this' });
     return Response.json(answer);
   });
   assert.deepEqual(await askCloud('Analyze this', [contextFor(resource)], history), answer);
@@ -64,4 +64,32 @@ test('unauthorized inventory and invalid responses surface errors', async t => {
   await assert.rejects(getInventory(), /not authorized/);
   fetch.mock.mockImplementation(async () => new Response('not JSON', { status: 200 }));
   await assert.rejects(getInventory(), /empty response/);
+});
+
+
+test('S3 chat response is adapted for rendering with its source', () => {
+  const parsed = parseAnswer({ message: 'Template analysis', source: 's3://bucket/snapshot.json' });
+  assert.deepEqual(parsed.parts, [{ type: 'text', text: 'Template analysis' }]);
+  assert.equal(parsed.source, 's3://bucket/snapshot.json');
+  assert.deepEqual(parsed.references, []);
+  assert.throws(() => parseAnswer({ message: 'Answer', source: 'https://invalid' }));
+});
+
+test('chat includes JWT and surfaces backend failures', async t => {
+  const originalStorage = globalThis.localStorage;
+  globalThis.localStorage = { getItem: () => JSON.stringify({ token: 'test-token', username: 'admin' }) };
+  const fetch = t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.equal(options.headers.Authorization, 'Bearer test-token');
+    return Response.json({ message: 'Answer', source: 's3://bucket/key' });
+  });
+  try {
+    assert.equal(parseAnswer(await askCloud('Question')).message, 'Answer');
+    fetch.mock.mockImplementation(async () => Response.json({ error: { message: 'Unable to read the configured S3 document' } }, { status: 502 }));
+    await assert.rejects(askCloud('Question'), /Unable to read/);
+    fetch.mock.mockImplementation(async () => new Response('', { status: 401 }));
+    await assert.rejects(askCloud('Question'), /Sign out and sign in/);
+  } finally {
+    if (originalStorage === undefined) delete globalThis.localStorage;
+    else globalThis.localStorage = originalStorage;
+  }
 });

@@ -22,15 +22,18 @@ export async function submitRecon(target) {
   return data;
 }
 
-// Proposed AWS contracts; the current Recon AI backend does not implement these.
+// Optional inventory APIs; S3-backed chat works independently.
 const cloudBase = (import.meta.env?.VITE_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
+const configuredChatPath = import.meta.env?.VITE_CLOUD_CHAT_PATH || '';
+export const structuredChat = Boolean(configuredChatPath && !['/api/v1/chat', '/api/v1/cloud/chat'].includes(configuredChatPath));
+export const inventoryConfigured = Boolean(import.meta.env?.VITE_AWS_INVENTORY_PATH);
 export const connectionPath = import.meta.env?.VITE_AWS_CONNECT_PATH || '';
 
 async function cloudRequest(path, options = {}) {
   let response;
   try {
     response = await fetch(`${cloudBase}${path}`, {
-      ...options, credentials: 'include', signal: options.signal || AbortSignal.timeout(30000),
+      ...options, credentials: 'omit', signal: options.signal || AbortSignal.timeout(30000),
       headers: { 'Content-Type': 'application/json', ...authHeaders(), ...options.headers },
     });
   } catch (error) {
@@ -40,9 +43,10 @@ async function cloudRequest(path, options = {}) {
   if (response.status === 404 || response.status === 501) {
     throw new Error('AWS integration is unavailable. This backend does not yet provide the required cloud API.');
   }
-  if (response.status === 401 || response.status === 403) throw new Error('AWS access is not authorized. Connect through your authorized backend integration.');
+  if (response.status === 401) throw new Error('Your session is not authorized. Sign out and sign in again.');
+  if (response.status === 403) throw new Error('Access is not authorized for this request.');
   const data = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(data?.error?.message || `Cloud request failed (${response.status}).`);
+  if (!response.ok) throw new Error(data?.error?.details?.map(item => item.message).join('; ') || data?.error?.message || `Cloud request failed (${response.status}).`);
   if (!data) throw new Error('The backend returned an empty response.');
   return data;
 }
@@ -57,8 +61,9 @@ export function getResource(resource, signal) {
 }
 
 export function askCloud(question, resources, messages) {
-  return cloudRequest(import.meta.env?.VITE_CLOUD_CHAT_PATH || '/api/v1/cloud/chat', {
-    method: 'POST', body: JSON.stringify({ question, resources, messages }),
+  return cloudRequest(structuredChat ? configuredChatPath : '/api/v1/chat', {
+    method: 'POST', body: JSON.stringify(structuredChat ? { question, resources, messages } : { question }),
+    signal: AbortSignal.timeout(90000),
   });
 }
 

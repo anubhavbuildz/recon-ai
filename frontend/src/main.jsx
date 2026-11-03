@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import { ArrowUp, Box, ChevronDown, ChevronRight, Cloud, Database, HardDrive, Layers,
   LoaderCircle, Menu, Network, Paperclip, Plus, RefreshCw, Search,
   Server, ShieldCheck, Sparkles, X, ExternalLink, AlertCircle, Sun, Moon } from 'lucide-react';
-import { askCloud, connectAWS, connectionPath, getInventory, getResource } from './api';
+import { askCloud, connectAWS, connectionPath, getInventory, getResource, inventoryConfigured, structuredChat } from './api';
 import { contextFor, parseAnswer, parseInventory, resourceKey, services, verifiedReference, isResource } from './resources';
 import './style.css';
 import LoginGate from './Login';
@@ -22,6 +22,7 @@ function Markdown({ children, inline = false }) {
 
 function Answer({ answer, inventory, inspect }) {
   return <div className="answer-content">
+    {answer.source && <p className="answer-source"><Database size={13}/>Source: <span>{answer.source}</span></p>}
     {answer.parts.map((part, index) => {
       if (part.type === 'text') return <Markdown inline key={index}>{part.text}</Markdown>;
       const reference = answer.references.find(item => item.id === part.reference_id);
@@ -107,6 +108,7 @@ function App({ username, signOut, signingOut, signOutError }) {
   const inFlight = useRef(false);
 
   useEffect(() => {
+    if (!inventoryConfigured) { setInventoryLoading(false); return; }
     const controller = new AbortController();
     setInventoryLoading(true); setInventoryError('');
     getInventory(controller.signal).then(parseInventory).then(data => {
@@ -121,13 +123,14 @@ function App({ username, signOut, signingOut, signOutError }) {
   useEffect(() => { end.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, [messages, sending]);
 
   function attach(resource) {
+    if (!structuredChat) { setPrompt(`Explain resource ${resource.resource_id} in the configured S3 document.`); composer.current?.focus(); return; }
     setAttachments(previous => previous.some(item => resourceKey(item) === resourceKey(resource)) ? previous : [...previous, resource]);
     if (window.innerWidth < 900) { setSelected(null); setSidebar(false); }
     composer.current?.focus();
   }
   async function send(event) {
     event?.preventDefault();
-    if (!prompt.trim() || inFlight.current || inventoryLoading || inventoryError) return;
+    if (!prompt.trim() || inFlight.current) return;
     const question = prompt.trim();
     const resources = attachments.map(contextFor);
     const history = messages.map(item => ({ role: item.role, content: item.content, resources: item.resources || [] }));
@@ -144,7 +147,7 @@ function App({ username, signOut, signingOut, signOutError }) {
     try { await connectAWS(); } catch (error) { setConnectionError(error.message); }
     finally { setConnecting(false); }
   }
-  const ready = !inventoryLoading && !inventoryError;
+  const inventoryReady = inventoryConfigured && !inventoryLoading && !inventoryError;
 
   return <div className={`cloud-app${darkMode ? ' dark-mode' : ''}${sidebar ? ' sidebar-open' : ''}${selected ? ' has-drawer' : ''}`}>
     {sidebar && <button className="sidebar-backdrop" onClick={() => setSidebar(false)} aria-label="Close infrastructure explorer"/>}
@@ -154,7 +157,7 @@ function App({ username, signOut, signingOut, signOutError }) {
       <div className="explorer-title"><h2>Infrastructure</h2><button className="icon-button" onClick={() => setReload(n => n + 1)} disabled={inventoryLoading || sending} aria-label="Refresh inventory"><RefreshCw size={15} className={inventoryLoading ? 'spin' : ''}/></button></div>
       <label className="resource-search"><Search size={15}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search resources..." aria-label="Search AWS resources"/></label>
       <div className="inventory-content" aria-live="polite">
-        {inventoryLoading ? <div className="sidebar-state"><LoaderCircle size={22} className="spin"/><p>Retrieving infrastructure…</p></div> : inventoryError ? <div className="sidebar-state"><Cloud size={32}/><h3>Infrastructure unavailable</h3><p>{inventoryError}</p><button className="text-button" onClick={() => setReload(n => n + 1)}>Try again</button></div> : <>
+        {!inventoryConfigured ? <div className="sidebar-state"><Database size={30}/><h3>S3 document chat</h3><p>Ask about the document configured on the backend. The model reads it through the S3 tool.</p><p>Live resource inventory is not connected.</p></div> : inventoryLoading ? <div className="sidebar-state"><LoaderCircle size={22} className="spin"/><p>Retrieving infrastructure…</p></div> : inventoryError ? <div className="sidebar-state"><Cloud size={32}/><h3>Infrastructure unavailable</h3><p>{inventoryError}</p><button className="text-button" onClick={() => setReload(n => n + 1)}>Try again</button></div> : <>
           {supported.map(service => {
             const ServiceIcon = icons[service];
             const all = inventory.filter(resource => resource.service === service);
@@ -169,7 +172,7 @@ function App({ username, signOut, signingOut, signOutError }) {
         </>}
       </div>
       <div className="account-controls"><span>Signed in as {username}</span><button className="text-button" onClick={signOut} disabled={signingOut}>{signingOut ? 'Signing out…' : 'Sign out'}</button>{signOutError && <p role="alert">{signOutError}</p>}</div>
-      <div className="connection-card"><span className="connection-label"><span className={`connection-dot${ready ? ' connected' : ''}`}/>{ready ? 'Inventory retrieved' : 'AWS not connected'}</span><button className="connect-button" onClick={connect} disabled={!connectionPath || connecting}>{connecting ? <LoaderCircle size={15} className="spin"/> : <Cloud size={16}/>}Connect AWS account</button>{!connectionPath && <p>Authorized connection API not configured.</p>}{connectionError && <p role="alert">{connectionError}</p>}<span className="read-only"><ShieldCheck size={12}/>Read-only infrastructure access</span></div>
+      <div className="connection-card"><span className="connection-label"><span className={`connection-dot${inventoryReady ? ' connected' : ''}`}/>{inventoryReady ? 'Inventory retrieved' : 'S3 document chat'}</span><button className="connect-button" onClick={connect} disabled={!connectionPath || connecting}>{connecting ? <LoaderCircle size={15} className="spin"/> : <Cloud size={16}/>}Connect AWS account</button>{!connectionPath && <p>Authorized connection API not configured.</p>}{connectionError && <p role="alert">{connectionError}</p>}<span className="read-only"><ShieldCheck size={12}/>Read-only infrastructure access</span></div>
     </aside>
 
     <div className="chat-workspace">
@@ -180,8 +183,8 @@ function App({ username, signOut, signingOut, signOutError }) {
       </main>
       <div className="composer-dock">
         {chatError && <div role="alert" className="chat-error"><AlertCircle size={16}/><span>{chatError} Your question is restored below so you can retry.</span></div>}
-        {!ready && <p className="backend-notice"><AlertCircle size={14}/>{inventoryLoading ? 'Checking infrastructure availability…' : 'AWS inventory and AI chat APIs must be connected before questions can be sent.'}</p>}
-        <form className="composer" onSubmit={send}><div className="attachment-chips">{attachments.map(resource => <span className="attachment-chip" key={resourceKey(resource)} title={`${resource.account_id} · ${resource.region}`}><Box size={14}/>{resource.name || resource.resource_id}<small>{resource.region}</small><button type="button" disabled={sending} aria-label={`Remove ${resource.name || resource.resource_id}`} onClick={() => setAttachments(previous => previous.filter(item => resourceKey(item) !== resourceKey(resource)))}><X size={13}/></button></span>)}</div><label className="sr-only" htmlFor="prompt">Ask about your AWS infrastructure</label><textarea ref={composer} id="prompt" placeholder="Ask anything about your AWS infrastructure..." value={prompt} onChange={event => setPrompt(event.target.value)} rows={2} maxLength={12000} disabled={sending} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); send(); } }}/><div className="composer-toolbar"><button type="button" className="attach-action" onClick={() => setSidebar(true)}><Paperclip size={16}/><span>Attach resource</span></button><span className="keyboard-hint">Shift + Enter for a new line</span><button className="send-button" disabled={!ready || !prompt.trim() || sending} aria-label="Send question">{sending ? <LoaderCircle size={18} className="spin"/> : <ArrowUp size={20}/>}</button></div></form>
+        {!structuredChat && <p className="backend-notice"><Database size={14}/>Answers use the configured S3 document. Each question is analyzed independently.</p>}
+        <form className="composer" onSubmit={send}><div className="attachment-chips">{attachments.map(resource => <span className="attachment-chip" key={resourceKey(resource)} title={`${resource.account_id} · ${resource.region}`}><Box size={14}/>{resource.name || resource.resource_id}<small>{resource.region}</small><button type="button" disabled={sending} aria-label={`Remove ${resource.name || resource.resource_id}`} onClick={() => setAttachments(previous => previous.filter(item => resourceKey(item) !== resourceKey(resource)))}><X size={13}/></button></span>)}</div><label className="sr-only" htmlFor="prompt">Ask about your AWS infrastructure</label><textarea ref={composer} id="prompt" placeholder="Ask anything about your AWS infrastructure..." value={prompt} onChange={event => setPrompt(event.target.value)} rows={2} maxLength={12000} disabled={sending} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); send(); } }}/><div className="composer-toolbar"><button type="button" className="attach-action" disabled={!structuredChat || !inventoryReady} onClick={() => setSidebar(true)}><Paperclip size={16}/><span>Attach resource</span></button><span className="keyboard-hint">Shift + Enter for a new line</span><button className="send-button" disabled={!prompt.trim() || sending} aria-label="Send question">{sending ? <LoaderCircle size={18} className="spin"/> : <ArrowUp size={20}/>}</button></div></form>
         <p className="composer-footnote">Grounded in available AWS evidence. Review recommendations before making changes.</p>
       </div>
     </div>

@@ -38,6 +38,13 @@ export function verifiedReference(reference, inventory) {
 }
 
 export function parseAnswer(data) {
+  // Adapt the backend's document-chat response to the shared answer renderer.
+  if (data && typeof data.message === 'string' && data.message.trim()
+      && typeof data.source === 'string' && /^s3:\/\/[^/]+\/.+/.test(data.source)
+      && data.parts === undefined && data.references === undefined) {
+    return { message: data.message, source: data.source,
+      parts: [{ type: 'text', text: data.message }], references: [] };
+  }
   if (!data || typeof data.message !== 'string' || !Array.isArray(data.references)
     || !data.references.every(ref => typeof ref.id === 'string' && isResource(ref)
       && (ref.label === undefined || typeof ref.label === 'string')
