@@ -1,10 +1,11 @@
+import { authHeaders } from './auth.js';
 const baseUrl = (import.meta.env?.VITE_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
 
 export async function submitRecon(target) {
   let response;
   try {
     response = await fetch(`${baseUrl}/api/v1/recon`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ target }), signal: AbortSignal.timeout(30000),
     });
   } catch {
@@ -30,7 +31,7 @@ async function cloudRequest(path, options = {}) {
   try {
     response = await fetch(`${cloudBase}${path}`, {
       ...options, credentials: 'include', signal: options.signal || AbortSignal.timeout(30000),
-      headers: { 'Content-Type': 'application/json', ...options.headers },
+      headers: { 'Content-Type': 'application/json', ...authHeaders(), ...options.headers },
     });
   } catch (error) {
     if (error.name === 'AbortError') throw error;

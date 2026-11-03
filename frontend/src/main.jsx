@@ -7,6 +7,7 @@ import { ArrowUp, Box, ChevronDown, ChevronRight, Cloud, Database, HardDrive, La
 import { askCloud, connectAWS, connectionPath, getInventory, getResource } from './api';
 import { contextFor, parseAnswer, parseInventory, resourceKey, services, verifiedReference, isResource } from './resources';
 import './style.css';
+import LoginGate from './Login';
 
 const icons = { ec2: Server, ebs: HardDrive, rds: Database, s3: Box, vpc: Network, elb: Layers };
 const suggestions = ['Which AWS resources are underutilized?', 'Where can I reduce my monthly cloud costs?', 'Are there any unattached EBS volumes?', 'Analyze my EC2 instances.'];
@@ -72,7 +73,7 @@ function ResourceDrawer({ resource, close, attach }) {
   </aside>;
 }
 
-function App() {
+function App({ username, signOut, signingOut, signOutError }) {
   const [darkMode, setDarkMode] = useState(() => {
     try {
       const saved = localStorage.getItem('recon-ai-theme');
@@ -167,6 +168,7 @@ function App() {
           {inventory.length > 0 && search && !inventory.some(resource => `${resource.name || ''} ${resource.resource_id} ${resource.region} ${resource.account_id} ${resource.status || ''}`.toLowerCase().includes(search.toLowerCase())) && <p className="sidebar-state">No matching resources.</p>}
         </>}
       </div>
+      <div className="account-controls"><span>Signed in as {username}</span><button className="text-button" onClick={signOut} disabled={signingOut}>{signingOut ? 'Signing out…' : 'Sign out'}</button>{signOutError && <p role="alert">{signOutError}</p>}</div>
       <div className="connection-card"><span className="connection-label"><span className={`connection-dot${ready ? ' connected' : ''}`}/>{ready ? 'Inventory retrieved' : 'AWS not connected'}</span><button className="connect-button" onClick={connect} disabled={!connectionPath || connecting}>{connecting ? <LoaderCircle size={15} className="spin"/> : <Cloud size={16}/>}Connect AWS account</button>{!connectionPath && <p>Authorized connection API not configured.</p>}{connectionError && <p role="alert">{connectionError}</p>}<span className="read-only"><ShieldCheck size={12}/>Read-only infrastructure access</span></div>
     </aside>
 
@@ -187,4 +189,4 @@ function App() {
   </div>;
 }
 
-createRoot(document.getElementById('root')).render(<App />);
+createRoot(document.getElementById('root')).render(<LoginGate>{auth => <App {...auth}/>}</LoginGate>);
