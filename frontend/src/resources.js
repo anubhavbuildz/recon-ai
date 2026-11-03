@@ -42,7 +42,7 @@ export function parseAnswer(data) {
   if (data && typeof data.message === 'string' && data.message.trim()
       && typeof data.source === 'string' && /^s3:\/\/[^/]+\/.+/.test(data.source)
       && data.parts === undefined && data.references === undefined) {
-    return { message: data.message, source: data.source,
+    return { message: data.message, source: data.source, sources: Array.isArray(data.sources) ? data.sources.filter(source => typeof source === 'string' && /^s3:\/\/[^/]+\/.+/.test(source)) : [],
       parts: [{ type: 'text', text: data.message }], references: [] };
   }
   if (!data || typeof data.message !== 'string' || !Array.isArray(data.references)

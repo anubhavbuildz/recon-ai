@@ -63,7 +63,7 @@ export function getResource(resource, signal) {
 export function askCloud(question, resources, messages) {
   return cloudRequest(structuredChat ? configuredChatPath : '/api/v1/chat', {
     method: 'POST', body: JSON.stringify(structuredChat ? { question, resources, messages } : { question }),
-    signal: AbortSignal.timeout(90000),
+    signal: AbortSignal.timeout(180000),
   });
 }
 

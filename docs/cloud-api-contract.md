@@ -1,3 +1,8 @@
+> Integration update: the frontend now defaults to authenticated `POST /api/v1/chat`,
+> sending `{question}` and displaying `{message, source}`. It works without inventory.
+> The structured cloud endpoints described below remain optional external integrations;
+> built-in document chat does not submit history or resource attachments.
+
 # Cloud optimizer frontend integration contract
 
 ## Implementation status

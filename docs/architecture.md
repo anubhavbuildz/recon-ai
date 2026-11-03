@@ -1,136 +1,127 @@
-# Architecture diagrams
+# Architecture
 
-These diagrams describe the backend reconnaissance boilerplate. The current frontend is a Cloud Resource Optimizer; see [Cloud API contracts](cloud-api-contract.md) for its separate, currently unimplemented backend integration. The frontend portion of the module diagram below represents the preserved reconnaissance client rather than the current screen. The workflow returns `not_executed`; tools and the optional LLM client are not invoked.
+Recon AI has two separate backend workflows: authenticated S3-backed model chat and placeholder reconnaissance. The React login works with the backend session API. The frontend sends authenticated questions to `/api/v1/chat` and adapts its message/source response for display. Chat does not depend on inventory availability. The inventory explorer and resource details still need their optional backend integrations. Built-in document chat handles each question independently and does not send history or attachments.
 
-## Class diagram
+Current editable diagrams are collected in [diagrams/README.md](diagrams/README.md). AWS provisioning instructions are in [aws.md](aws.md); testing methods and feature coverage are in [test_case.md](test_case.md). Supplied PNG designs in `images/` show broader planned capabilities and are not the current runtime specification.
 
-Only actual Python classes and types are shown. The orchestrator and recon agent are modules containing async functions, so they appear in the module diagram below.
-
-`service/provide/aws/base.py` is a module scaffold with no classes or implementation, so it appears only in the module diagram. Its package files are `service/provide/__init__.py` and `service/provide/aws/__init__.py`.
+## Request and authentication boundary
 
 ```mermaid
-classDiagram
-    class BaseModel {
-        <<Pydantic>>
-    }
-    class Settings {
-        +list~str~ cors_origins
-        +str llm_api_key
-        +str llm_base_url
-        +str llm_model
-        +float llm_timeout_seconds
-    }
-    class ReconRequest {
-        +str target
-        +normalize_target(value) str
-    }
-    class ReconResponse {
-        +str target
-        +Literal status
-        +str message
-        +list~str~ agents
-    }
-    class ReconState {
-        <<TypedDict>>
-        +str target
-        +ReconResponse result
-    }
-    class ToolDefinition {
-        <<frozen dataclass>>
-        +str name
-        +bool active
-        +bool configured
-    }
-    class LLMClient {
-        +str model
-        +AsyncOpenAI client
-        +__init__(settings)
-        +invoke(prompt) str
-        +close() None
-    }
-    class AsyncOpenAI {
-        <<external SDK>>
-    }
-    class RuntimeError {
-        <<Python builtin>>
-    }
-    class ModelError
-
-    BaseModel <|-- Settings
-    BaseModel <|-- ReconRequest
-    BaseModel <|-- ReconResponse
-    ReconState --> ReconResponse : optional result
-    LLMClient ..> Settings : constructor configuration
-    LLMClient *-- AsyncOpenAI : owns client
-    LLMClient ..> ModelError : raises
-    RuntimeError <|-- ModelError
+flowchart TD
+    Browser[React login and local storage] --> CORS[CORS wrapper]
+    APIClient[API client with Bearer JWT] --> CORS
+    CORS --> Auth[Authentication middleware]
+    Auth -->|POST auth/login only| Login[Environment credential comparison]
+    Login --> JWT[HS256 JWT and SQLite session record]
+    Auth -->|All other routes| Verify[Verify JWT and active session]
+    Verify --> Routes[FastAPI routes and validation]
+    Routes --> Me[auth/me and auth/logout]
+    Routes --> Health[health and protected API docs]
+    Routes --> Chat[POST chat]
+    Routes --> Recon[POST recon]
 ```
 
-`Settings.llm_api_key`, `llm_base_url`, and `llm_model` may be `None`. `ReconState.result` is absent before the agent node runs. `invoke()` and `close()` are async. Response defaults are `status="not_executed"`, the tools-not-configured message, and `agents=[]`. Tool definitions contain metadata only.
+Valid browser preflights are exempt from authentication. Other requests, including unknown paths, require a valid session before routing. Login fails closed when credentials or a sufficiently long secret are missing. JWT verification pins HS256 and checks required claims, issuer, and audience. The SQLite record must also exist and match the current username and credential fingerprint. Logout deletes that record. Credentials and signing keys come from backend settings and are never returned to the frontend.
 
-## Module diagram
+The local-storage token has no automatic expiry. Changing credentials or the signing secret invalidates existing tokens. Each browser login has an independent session record. The browser clears its stored session only during explicit sign-out; failed validation or backend outages do not remove it.
 
-Solid arrows show application calls or data use; dotted arrows show configuration, type dependencies, or optional components. The HTTPS target is validated locally without a network request.
+## S3 tool-calling sequence
 
 ```mermaid
-flowchart TB
-    subgraph Frontend["frontend/src"]
-        UI["main.jsx: React form and response states"]
-        API["api.js: submitRecon(target)"]
-        UI --> API
-    end
-
-    subgraph Backend["backend/app"]
-        MAIN["main.py: FastAPI, CORS, error handlers"]
-        CONFIG["core/config.py: Settings, get_settings()"]
-        ROUTES["api/routes.py: health(), recon()"]
-        SCHEMAS["api/schemas.py: ReconRequest, ReconResponse"]
-
-        subgraph Agents["service/agent"]
-            ORCH["orchestrator.py: run_recon(target)"]
-            AGENT["recon_agent.py: run_recon_agent(target)"]
-        end
-
-        subgraph Workflow["service/llm/workflow"]
-            GRAPH["graph.py: ReconState, run_workflow(), recon_node()"]
-            LANGGRAPH["Compiled LangGraph: START → recon → END"]
-        end
-
-        subgraph Tools["service/tools"]
-            REGISTRY["registry.py: ToolDefinition, list_tools()"]
-            POLICY["policy.py: require_execution_permission() — always denies"]
-        end
-
-        subgraph OptionalLLM["service/llm/base — optional, outside request flow"]
-            CLIENT["client.py: LLMClient, ModelError"]
-            SDK["OpenAI-compatible SDK client"]
-        end
-
-        subgraph Providers["service/provide"]
-            AWS["aws/base.py: scaffold only, implementation pending"]
-        end
-
-        MAIN --> ROUTES
-        MAIN -.-> CONFIG
-        ROUTES --> SCHEMAS
-        ROUTES --> ORCH
-        ORCH --> GRAPH
-        GRAPH --> LANGGRAPH
-        LANGGRAPH --> AGENT
-        AGENT --> REGISTRY
-        AGENT --> SCHEMAS
-        GRAPH -.-> SCHEMAS
-        ORCH -.-> SCHEMAS
-        POLICY -.-> REGISTRY
-        CLIENT -.-> CONFIG
-        CLIENT -.-> SDK
-    end
-
-    ENV["backend/.env and process environment"] -.-> CONFIG
-    VITE["VITE_API_BASE_URL"] -.-> API
-    API -->|"HTTP POST /api/v1/recon"| MAIN
+sequenceDiagram
+    participant U as Authenticated API client
+    participant R as POST /api/v1/chat
+    participant W as run_chat_workflow
+    participant M as Base LLMClient / ChatOpenAI
+    participant T as call_s3 LangChain tool
+    participant S as S3 provider
+    U->>R: question
+    R->>W: validated question
+    W->>M: SystemMessage + HumanMessage, bind_tools(call_s3)
+    M-->>W: AIMessage.tool_calls
+    W->>W: Validate one known tool, empty args, call ID
+    W->>T: ainvoke(tool_args)
+    T->>S: Read exact object or dated snapshots in worker thread
+    S-->>T: Bounded document or dated JSON bundle
+    T-->>W: Document text
+    W->>M: Full history + ToolMessage(tool_call_id), tool_choice=auto
+    M-->>W: Final AIMessage
+    W-->>R: ChatResponse(message, source, sources)
+    R-->>U: JSON response
 ```
 
-API responses return through the same call chain to the React form. The policy module is a future execution boundary and is not called by the placeholder agent. No request-flow module calls `LLMClient`, and no tool execution handler exists.
+Both turns use `tool_choice="auto"` for provider compatibility. Application code requires exactly one valid `call_s3` request on the first turn and rejects tool requests on the final turn. Invalid or unknown calls fail without reading S3. `create_call_s3_tool(settings)` captures the server configuration and exposes a no-argument tool: the model cannot select arbitrary buckets or keys. The tool delegates boto3 work to `asyncio.to_thread` and closes its provider client. `read_configured_text()` bounds both reported and actual content size, decodes UTF-8 with optional BOM, rejects empty content, and closes the response stream. No bucket creation or object writes occur.
 
-The AWS provider scaffold is intentionally disconnected: no routes, agents, or workflows import it yet. AWS authentication, inventory, details, and cloud chat remain unimplemented.
+The model client owns sync and async HTTP clients, applies configured timeout and output limits, disables model retries, and wraps provider errors. The workflow closes the client in `finally`. S3/configuration/model errors become sanitized API responses. The prompt treats tool output as untrusted evidence; this is a behavioral guard, not a guarantee against prompt injection.
+
+## Evidence selection and collection
+
+The independent Terraform collector runs on an EventBridge scheduled rule every
+five minutes for testing. It reads EC2/EBS metadata and rolling 14-day CloudWatch
+CPU statistics and writes timestamped JSON under `snapshots/YYYY/MM/DD/` (UTC).
+It does not deploy the application or collect RDS/S3 inventory and billing.
+Terraform packages the Lambda code and sets its runtime bucket and region.
+
+The no-argument S3 tool supports two modes selected by backend settings:
+
+| Mode | Configuration | Selection |
+| --- | --- | --- |
+| Single document | `S3_OBJECT_KEY`, no prefix | One exact UTF-8 object, including a template or synthetic fixture |
+| Snapshot history | `S3_SNAPSHOT_PREFIX` | Latest timestamped JSON per UTC day over `S3_HISTORY_DAYS` (default 3, range 1–14) |
+
+History mode takes precedence. It lists each date prefix with pagination, selects
+the lexically latest timestamped key, bounds total context size, decodes JSON
+objects, and returns date/source labels and missing dates. It fails if no files
+exist. It does not automatically read arbitrary dates, every five-minute sample,
+or an unrelated `testing/` fixture. ListBucket and GetObject permissions must
+cover the selected prefix. The frontend displays each returned source URI.
+
+The role prompt is loaded from `service/llm/role/role.md` on each chat request.
+It distinguishes synthetic evidence, missing dates and intended configuration
+from live state. Rolling 14-day CPU windows overlap; they are not independent
+daily metrics. Prompts do not establish factual correctness or immunity to injection.
+
+The browser sends one question and a Bearer JWT; history here means historical
+S3 snapshots, not conversation history. Resource attachment and live inventory
+APIs remain separate optional contracts. Provider timeouts return HTTP 504;
+other model/S3 failures generally return 502, and unsupported/configuration
+context errors return 503. The browser allows 180 seconds for a chat request.
+
+## Modules and responsibilities
+
+| Module | Responsibility |
+| --- | --- |
+| `app/main.py` | Authentication middleware, CORS, exception handlers, application logging |
+| `api/routes.py`, `api/schemas.py` | Login/session, health, chat, recon endpoints and validated request/response types |
+| `core/config.py` | Settings loaded from environment and `backend/.env` |
+| `core/auth.py` | Credential verification, JWT signing/verification, persistent session revocation |
+| `service/llm/base/client.py` | `LLMClient`, `ChatOpenAI`, `bind_tools`, safe model stage logs |
+| `service/llm/workflow/chain.py` | Bounded model/tool exchange and separate recon runnable |
+| `service/tools/call_s3.py` | Configured single-document/history S3 LangChain tool |
+| `service/provide/aws/base.py` | boto3 client, bucket checks, bounded text reads and daily history selection |
+| `service/agent/` | Recon orchestrator and placeholder recon agent |
+| `service/tools/registry.py`, `policy.py` | Recon tool metadata and unconditional execution denial |
+| `frontend/src/Login.jsx`, `auth.js` | Login UI, session verification, local storage and sign-out |
+| `frontend/src/main.jsx`, `api.js`, `resources.js` | Infrastructure UI and separate structured cloud API contract |
+
+## Reconnaissance path
+
+```mermaid
+flowchart LR
+    R[POST recon] --> V[Normalize domain or HTTPS URL]
+    V --> O[run_recon orchestrator]
+    O --> W[run_workflow / RunnableLambda]
+    W --> A[run_recon_agent]
+    A --> T[Inspect registry metadata]
+    T --> P[ReconResponse: not_executed]
+```
+
+Recon does not invoke a model, contact a target, or execute scanning tools. Its deny-all policy is separate from S3 chat's scoped executable read tool. Input normalization is syntax validation, not proof of authorization or an SSRF boundary for future collectors.
+
+## Persistence and observability
+
+`backend/.data/sessions.sqlite3` stores JWT hashes, usernames, and credential fingerprints. The file and `.env` are ignored by Git. Preserve the database across restarts to preserve sessions; deleting records invalidates the corresponding tokens. No inventory or conversation database is present.
+
+Application logs go to stderr with timestamps and module names. Workflow logs include a run ID; model and S3 module logs describe stages, durations and counts without payloads. The run ID is currently present only in workflow logs, not propagated into every module. Unhandled API errors include server-side tracebacks.
+
+See the [README](../README.md) for setup and API use, [security policy](../security.md) for limitations, and [cloud API contracts](cloud-api-contract.md) for the frontend's remaining integration requirements.

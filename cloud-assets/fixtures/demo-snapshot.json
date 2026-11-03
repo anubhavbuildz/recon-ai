@@ -1,0 +1,121 @@
+{
+  "schema_version": "1.0",
+  "collected_at": "2026-11-03T12:34:14+00:00",
+  "region": "us-east-1",
+  "metric_window_start": "2026-10-20T12:34:14+00:00",
+  "metric_window_end": "2026-11-03T12:34:14+00:00",
+  "ec2_instances": [
+    {
+      "resource_id": "i-00000000000000001",
+      "service": "ec2",
+      "region": "us-east-1",
+      "instance_type": "t3.large",
+      "state": "running",
+      "name": "demo-web-low-cpu",
+      "cpu_14d": {
+        "average_percent": 2.4,
+        "maximum_percent": 12.0,
+        "sample_count": 336
+      }
+    },
+    {
+      "resource_id": "i-00000000000000002",
+      "service": "ec2",
+      "region": "us-east-1",
+      "instance_type": "t3.medium",
+      "state": "running",
+      "name": "demo-app-high-cpu",
+      "cpu_14d": {
+        "average_percent": 76.5,
+        "maximum_percent": 98.0,
+        "sample_count": 336
+      }
+    },
+    {
+      "resource_id": "i-00000000000000003",
+      "service": "ec2",
+      "region": "us-east-1",
+      "instance_type": "t3.medium",
+      "state": "stopped",
+      "name": "demo-worker-stopped",
+      "cpu_14d": {
+        "average_percent": null,
+        "maximum_percent": null,
+        "sample_count": 0
+      }
+    },
+    {
+      "resource_id": "i-00000000000000004",
+      "service": "ec2",
+      "region": "us-east-1",
+      "instance_type": "t3.small",
+      "state": "running",
+      "name": "demo-new-instance",
+      "cpu_14d": {
+        "average_percent": null,
+        "maximum_percent": null,
+        "sample_count": 0
+      }
+    }
+  ],
+  "ebs_volumes": [
+    {
+      "resource_id": "vol-00000000000000001",
+      "service": "ebs",
+      "region": "us-east-1",
+      "size_gib": 30,
+      "volume_type": "gp3",
+      "state": "in-use",
+      "attached_instance_ids": [
+        "i-00000000000000001"
+      ]
+    },
+    {
+      "resource_id": "vol-00000000000000002",
+      "service": "ebs",
+      "region": "us-east-1",
+      "size_gib": 100,
+      "volume_type": "gp3",
+      "state": "in-use",
+      "attached_instance_ids": [
+        "i-00000000000000002"
+      ]
+    },
+    {
+      "resource_id": "vol-00000000000000003",
+      "service": "ebs",
+      "region": "us-east-1",
+      "size_gib": 50,
+      "volume_type": "gp3",
+      "state": "available",
+      "attached_instance_ids": []
+    },
+    {
+      "resource_id": "vol-00000000000000004",
+      "service": "ebs",
+      "region": "us-east-1",
+      "size_gib": 200,
+      "volume_type": "gp3",
+      "state": "available",
+      "attached_instance_ids": []
+    },
+    {
+      "resource_id": "vol-00000000000000005",
+      "service": "ebs",
+      "region": "us-east-1",
+      "size_gib": 20,
+      "volume_type": "gp3",
+      "state": "in-use",
+      "attached_instance_ids": [
+        "i-00000000000000003"
+      ]
+    }
+  ],
+  "limitations": [
+    "SYNTHETIC TEST DATA ONLY. All resource identifiers and metrics are fabricated; none describe real AWS resources.",
+    "This file follows the collector output shape but was not fetched from AWS.",
+    "CPU metrics may be missing for stopped or recently launched instances.",
+    "No RAM metrics, service pricing, or account billing data are included.",
+    "This snapshot covers one AWS Region only."
+  ]
+}

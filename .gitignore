@@ -9,3 +9,17 @@ __pycache__/
 node_modules/
 dist/
 .DS_Store
+backend/.data/
+
+# Generated test coverage artifacts
+.coverage
+.coverage.*
+coverage/
+htmlcov/
+
+# Local Terraform providers, state, plans and Lambda package
+cloud-assets/.terraform/
+cloud-assets/*.tfstate
+cloud-assets/*.tfstate.*
+cloud-assets/*.tfplan
+cloud-assets/collector.zip

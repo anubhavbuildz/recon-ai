@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import ReactMarkdown from 'react-markdown';
 import { ArrowUp, Box, ChevronDown, ChevronRight, Cloud, Database, HardDrive, Layers,
-  LoaderCircle, Menu, Network, Paperclip, Plus, RefreshCw, Search,
+  LoaderCircle, LogOut, Menu, Network, Paperclip, RefreshCw,
   Server, ShieldCheck, Sparkles, X, ExternalLink, AlertCircle, Sun, Moon } from 'lucide-react';
 import { askCloud, connectAWS, connectionPath, getInventory, getResource, inventoryConfigured, structuredChat } from './api';
 import { contextFor, parseAnswer, parseInventory, resourceKey, services, verifiedReference, isResource } from './resources';
@@ -22,7 +22,7 @@ function Markdown({ children, inline = false }) {
 
 function Answer({ answer, inventory, inspect }) {
   return <div className="answer-content">
-    {answer.source && <p className="answer-source"><Database size={13}/>Source: <span>{answer.source}</span></p>}
+    {(answer.sources?.length ? answer.sources : answer.source ? [answer.source] : []).map(source => <p className="answer-source" key={source}><Database size={13}/>Source: <span>{source}</span></p>)}
     {answer.parts.map((part, index) => {
       if (part.type === 'text') return <Markdown inline key={index}>{part.text}</Markdown>;
       const reference = answer.references.find(item => item.id === part.reference_id);
@@ -92,7 +92,6 @@ function App({ username, signOut, signingOut, signOutError }) {
   const [inventoryLoading, setInventoryLoading] = useState(true);
   const [inventoryError, setInventoryError] = useState('');
   const [reload, setReload] = useState(0);
-  const [search, setSearch] = useState('');
   const [collapsed, setCollapsed] = useState({});
   const [sidebar, setSidebar] = useState(() => window.innerWidth > 1100);
   const [selected, setSelected] = useState(null);
@@ -153,26 +152,26 @@ function App({ username, signOut, signingOut, signOutError }) {
     {sidebar && <button className="sidebar-backdrop" onClick={() => setSidebar(false)} aria-label="Close infrastructure explorer"/>}
     <aside className="infrastructure-sidebar" aria-label="AWS infrastructure explorer">
       <a className="brand" href="./"><span className="brand-cube"><img className="app-emblem" src="/recon-cloud-search.png" alt=""/></span><span>RECON <b>AI</b><small>CLOUD INTELLIGENCE</small></span></a>
-      <button className="new-chat" disabled={sending} onClick={() => { setMessages([]); setChatError(''); setPrompt(''); setAttachments([]); }}><Plus size={17}/>New conversation</button>
-      <div className="explorer-title"><h2>Infrastructure</h2><button className="icon-button" onClick={() => setReload(n => n + 1)} disabled={inventoryLoading || sending} aria-label="Refresh inventory"><RefreshCw size={15} className={inventoryLoading ? 'spin' : ''}/></button></div>
-      <label className="resource-search"><Search size={15}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search resources..." aria-label="Search AWS resources"/></label>
+      <div className="explorer-title"><h2>Cloud provider</h2>{inventoryConfigured && <button className="icon-button" onClick={() => setReload(n => n + 1)} disabled={inventoryLoading || sending} aria-label="Refresh inventory"><RefreshCw size={15} className={inventoryLoading ? 'spin' : ''}/></button>}</div>
+      <div className="provider-card"><div className="provider-card-heading"><span className="provider-overline">CURRENTLY SUPPORTED</span><span className="provider-badge">AWS</span></div><div className="sidebar-aws-brand"><img src="/aws-mark.svg" alt="Amazon Web Services"/></div><div className="provider-card-footer"><span>Amazon Web Services</span><ShieldCheck size={15}/></div></div>
       <div className="inventory-content" aria-live="polite">
-        {!inventoryConfigured ? <div className="sidebar-state"><Database size={30}/><h3>S3 document chat</h3><p>Ask about the document configured on the backend. The model reads it through the S3 tool.</p><p>Live resource inventory is not connected.</p></div> : inventoryLoading ? <div className="sidebar-state"><LoaderCircle size={22} className="spin"/><p>Retrieving infrastructure…</p></div> : inventoryError ? <div className="sidebar-state"><Cloud size={32}/><h3>Infrastructure unavailable</h3><p>{inventoryError}</p><button className="text-button" onClick={() => setReload(n => n + 1)}>Try again</button></div> : <>
+        {!inventoryConfigured ? null : inventoryLoading ? <div className="sidebar-state"><LoaderCircle size={22} className="spin"/><p>Retrieving infrastructure…</p></div> : inventoryError ? <div className="sidebar-state"><Cloud size={32}/><h3>Infrastructure unavailable</h3><p>{inventoryError}</p><button className="text-button" onClick={() => setReload(n => n + 1)}>Try again</button></div> : <>
           {supported.map(service => {
             const ServiceIcon = icons[service];
             const all = inventory.filter(resource => resource.service === service);
-            const filtered = all.filter(resource => `${resource.name || ''} ${resource.resource_id} ${resource.region} ${resource.account_id} ${resource.status || ''}`.toLowerCase().includes(search.toLowerCase()));
-            if (search && !filtered.length) return null;
+            const filtered = all;
             return <section className="resource-group" key={service}><button className="category-toggle" aria-expanded={!collapsed[service]} onClick={() => setCollapsed(previous => ({ ...previous, [service]: !previous[service] }))}>{collapsed[service] ? <ChevronRight size={14}/> : <ChevronDown size={14}/>}<ServiceIcon size={16}/><span>{services[service]}</span><span className="count">{all.length}</span></button>
               {!collapsed[service] && (filtered.length ? filtered.map(resource => <button className={`resource-item${selected && resourceKey(selected) === resourceKey(resource) ? ' active' : ''}`} key={resourceKey(resource)} onClick={() => { setSelected(resource); if (window.innerWidth <= 1100) setSidebar(false); }}><span className="resource-item-name">{resource.name || resource.resource_id}</span><span>{resource.service.toUpperCase()} · {resource.region}</span>{resource.status && <small>{resource.status}</small>}</button>) : <p className="category-empty">No resources discovered</p>)}
             </section>;
           })}
           {!inventory.length && <div className="sidebar-state"><Box size={30}/><h3>No resources discovered</h3><p>The backend has not returned any AWS resources.</p></div>}
-          {inventory.length > 0 && search && !inventory.some(resource => `${resource.name || ''} ${resource.resource_id} ${resource.region} ${resource.account_id} ${resource.status || ''}`.toLowerCase().includes(search.toLowerCase())) && <p className="sidebar-state">No matching resources.</p>}
         </>}
       </div>
-      <div className="account-controls"><span>Signed in as {username}</span><button className="text-button" onClick={signOut} disabled={signingOut}>{signingOut ? 'Signing out…' : 'Sign out'}</button>{signOutError && <p role="alert">{signOutError}</p>}</div>
-      <div className="connection-card"><span className="connection-label"><span className={`connection-dot${inventoryReady ? ' connected' : ''}`}/>{inventoryReady ? 'Inventory retrieved' : 'S3 document chat'}</span><button className="connect-button" onClick={connect} disabled={!connectionPath || connecting}>{connecting ? <LoaderCircle size={15} className="spin"/> : <Cloud size={16}/>}Connect AWS account</button>{!connectionPath && <p>Authorized connection API not configured.</p>}{connectionError && <p role="alert">{connectionError}</p>}<span className="read-only"><ShieldCheck size={12}/>Read-only infrastructure access</span></div>
+      <div className="sidebar-footer">
+        {connectionPath && <div className="connection-card"><span className="connection-label"><span className={`connection-dot${inventoryReady ? ' connected' : ''}`}/>{inventoryReady ? 'Inventory retrieved' : 'AWS account'}</span><button className="connect-button" onClick={connect} disabled={connecting}>{connecting ? <LoaderCircle size={15} className="spin"/> : <Cloud size={16}/>}Connect AWS account</button>{connectionError && <p role="alert">{connectionError}</p>}</div>}
+        <div className="sidebar-access"><ShieldCheck size={14}/><span>Read-only infrastructure access</span></div>
+        <div className="account-controls"><span className="account-avatar" aria-hidden="true">{username.slice(0, 1).toUpperCase()}</span><div className="account-identity"><span className="account-name" title={username}>{username}</span><small>Personal workspace</small></div><button className="account-signout" onClick={signOut} disabled={signingOut} aria-label={signingOut ? 'Signing out' : 'Sign out'} title="Sign out">{signingOut ? <LoaderCircle className="spin" size={17}/> : <LogOut size={17}/>}</button>{signOutError && <p role="alert">{signOutError}</p>}</div>
+      </div>
     </aside>
 
     <div className="chat-workspace">
