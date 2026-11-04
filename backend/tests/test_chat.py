@@ -124,7 +124,7 @@ def test_repeated_tool_call_is_not_executed(monkeypatch):
     client.close.assert_awaited_once()
 
 
-def test_history_tool_and_multiple_sources(monkeypatch):
+def test_latest_three_tool_and_multiple_sources(monkeypatch):
     import json
 
     provider, client = setup(monkeypatch)
@@ -135,15 +135,17 @@ def test_history_tool_and_multiple_sources(monkeypatch):
     )
     sources = [
         "s3://bucket/snapshots/2026/11/03/a.json",
-        "s3://bucket/snapshots/2026/11/02/b.json",
+        "s3://bucket/snapshots/2026/11/03/b.json",
+        "s3://bucket/snapshots/2026/11/03/c.json",
     ]
     provider.read_snapshot_history.return_value = json.dumps(
         {
             "snapshots": [{"source": source, "data": {}} for source in sources],
-            "missing_dates": ["2026-11-01"],
         }
     )
-    response = asyncio.run(chain.run_chat_workflow("Compare today and yesterday"))
+    response = asyncio.run(
+        chain.run_chat_workflow("Compare the latest three snapshots")
+    )
     assert response.sources == sources
     assert response.source == sources[0]
     provider.read_snapshot_history.assert_called_once()

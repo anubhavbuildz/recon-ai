@@ -12,7 +12,7 @@ The frontend connects to the authenticated `/api/v1/chat` endpoint for S3-backed
 | [Architecture](docs/architecture.md) and [current diagrams](docs/diagrams/README.md) | Runtime flows, authentication, tool calls and history selection |
 | [AWS infrastructure setup](docs/aws.md) | Collector, optional EC2/RDS demo, IAM, verification and cleanup |
 | [Feature-wise test cases](docs/test_case.md) | Unit, integration and E2E scenarios and their execution status |
-| [Code coverage](docs/coverage-report.md) | Current measurements, gaps, HTML artifacts and reproduction commands |
+| [Code coverage](docs/coverage.md) | Current measurements, gaps, HTML artifacts and reproduction commands |
 | [Contributing](CONTRIBUTING.md) | Development workflow and checks |
 | [Code of conduct](CODE_OF_CONDUCT.md) | Community expectations and reporting |
 | [Security](security.md) | Security scope, limitations and vulnerability reporting |
@@ -37,13 +37,15 @@ metrics**; RDS inventory, S3 inventory, and Cost Explorer collection shown in th
 overview remain planned. The application already supports authenticated React
 chat through FastAPI and a LangChain S3 read tool. Multiple optimization agents,
 live resource detail lookup, and clickable resource references backed by inventory
-remain planned. The backend reads a configured snapshot key rather than
-automatically selecting the latest snapshot.
+remain planned. The backend reads a configured snapshot key, or selects the
+three newest JSON files when a snapshot prefix is configured.
 
 See [architecture documentation](docs/architecture.md) for the current request
 flow and implementation boundaries.
 
 ## Setup
+
+For a complete local and AWS walkthrough, see the [demo setup guide](docs/demo.md).
 
 Requires Python 3.12+ and a Node.js version supported by Vite 7 (20.19+ or 22.12+).
 
@@ -96,8 +98,10 @@ The frontend normally runs at <http://127.0.0.1:5173>. Restart the relevant serv
 | `CORS_ORIGINS` | Comma-separated exact origins; defaults to localhost and 127.0.0.1 on port 5173 |
 | `S3_BUCKET_NAME` | Existing bucket name without `s3://` or object path |
 | `S3_REGION` | AWS region; otherwise the SDK default |
-| `S3_OBJECT_KEY` | Exact UTF-8 object key used as model context |
-| `S3_MAX_BYTES` | Maximum document size: 200000 by default, at most 2000000 |
+| `S3_OBJECT_KEY` | Exact UTF-8 object key used when no prefix is configured |
+| `S3_SNAPSHOT_PREFIX` | Read up to three newest JSON files recursively under this prefix; overrides the object key |
+| `S3_HISTORY_DAYS` | Legacy setting; unused by latest-three selection |
+| `S3_MAX_BYTES` | Maximum combined context size: 200000 by default, at most 2000000 |
 | `LLM_API_KEY`, `LLM_MODEL` | Required for chat; server startup and login do not require them |
 | `LLM_BASE_URL` | Optional OpenAI-compatible provider endpoint |
 | `LLM_TIMEOUT_SECONDS` | Positive model timeout; defaults to 30 seconds |
@@ -148,7 +152,7 @@ The system prompt lives in `backend/app/service/llm/role/role.md` and is loaded 
 
 The base `LLMClient` wraps LangChain `ChatOpenAI`. The workflow binds the `call_s3` tool and sends `SystemMessage` and `HumanMessage` inputs. The first model turn must request `call_s3`; the application validates its name, empty arguments, and call ID, executes the async tool, and appends a matching `ToolMessage`. A second model turn returns the final answer with further tool calls rejected by application code. This bounds execution to one read and two model turns.
 
-`service/tools/call_s3.py` reads the server-configured object in single-document mode (or bounded dated snapshots in history mode) through `Aws.read_configured_text()` in a worker thread. Empty, oversized, or invalid UTF-8 files are rejected; streams and clients are closed. Each request reads the document afresh. The contents are sent to the configured model provider. A document describes evidence, not necessarily current AWS state. The model cannot modify AWS resources.
+`service/tools/call_s3.py` reads the server-configured object in single-document mode (or the three newest JSON snapshots in prefix mode) through `Aws.read_configured_text()` or `Aws.read_snapshot_history()` in a worker thread. Empty, oversized, or invalid UTF-8 files are rejected; streams and clients are closed. Each request reads the document afresh. The contents are sent to the configured model provider. A document describes evidence, not necessarily current AWS state. The model cannot modify AWS resources.
 
 Reconnaissance uses a separate `RunnableLambda` → recon agent → registry metadata path. It returns `status="not_executed"`, the placeholder message, and an empty agents list. Domain/HTTPS target validation is syntactic and performs no DNS or target requests. Recon tool execution is denied by `policy.py`; that policy is separate from the explicitly enabled S3 read tool.
 
@@ -214,33 +218,34 @@ aws s3 ls "s3://$(terraform output -raw snapshot_bucket)/snapshots/" --recursive
 To analyze a collected snapshot through the chat API, configure
 `S3_BUCKET_NAME` to the Terraform `snapshot_bucket` output, `S3_REGION` to the
 collector region, and `S3_OBJECT_KEY` to a specific snapshot JSON key. The backend
-reads that exact key in single-document mode. Enable snapshot history below to discover the latest file per date.
+reads that exact key in single-document mode. Configure a snapshot prefix below to read the three newest files.
 Snapshots must fit within `S3_MAX_BYTES`, and their contents will be sent to the
 configured model provider.
 
-## Snapshot history for comparisons
+## Latest three snapshots
 
-To compare today, yesterday, and the day before, configure the backend:
+Configure the backend to read up to three newest JSON files under a bucket prefix:
 
 ```env
+S3_BUCKET_NAME=your-snapshot-bucket
+S3_REGION=us-east-1
 S3_SNAPSHOT_PREFIX=snapshots/
-S3_HISTORY_DAYS=3
 ```
 
-Restart the backend. Prefix mode takes precedence over `S3_OBJECT_KEY`; leave the
-prefix unset to keep single-document mode (including the synthetic test fixture).
-The S3 tool lists each UTC date folder under the prefix, follows pagination, and
-reads the latest JSON key for each day using the collector's timestamped layout.
-It returns dated documents and missing dates to the model, allowing comparisons
-without sending every five-minute snapshot. `S3_HISTORY_DAYS` supports 1–14 days.
-The combined context must fit `S3_MAX_BYTES`; oversized or malformed data fails
-rather than silently truncating evidence. No files in the date window produces
-an error; partial history includes an explicit missing-date list.
+Restart the backend. Prefix mode takes precedence over `S3_OBJECT_KEY`; unset the
+prefix to read a single configured object. The reader follows S3 list pagination,
+includes nested folders, and selects up to three `.json` objects by S3
+`LastModified`, newest first (key descending breaks ties). It reads all three even
+when they are from the same day. A dated prefix such as `snapshots/2026/11/04/`
+restricts selection to that folder. `S3_HISTORY_DAYS` no longer limits selection.
 
-The backend identity needs `s3:ListBucket` for the configured prefix in addition
-to `s3:GetObject`. Responses include a `sources` list and the UI displays each
-source. CPU fields remain rolling 14-day statistics, not daily measurements.
-Try: “Compare my EC2 instances today and yesterday. What changed?”
+If only one or two files exist, those are read. No matching JSON files produces
+an error. The combined context must fit `S3_MAX_BYTES`; oversized or malformed
+snapshots fail instead of being silently truncated. Each snapshot must be a JSON
+object. The backend identity needs `s3:ListBucket` for the prefix and
+`s3:GetObject` for the files. Responses include all selected S3 sources.
+
+CPU fields remain rolling 14-day aggregates, not independent daily measurements.
 
 ## Logs
 
@@ -262,40 +267,69 @@ npm test
 npm run build
 ```
 
-Latest documentation-validation run (November 3, 2026): **98 backend tests** and
-**11 frontend tests** passed. Backend line/branch coverage is **90.64% / 84.31%**;
-frontend JavaScript line/branch coverage is **84.61% / 81.89%**.
-These frontend figures exclude React screens and are not whole-UI coverage.
+Latest unit/integration validation (November 4, 2026): **103 backend tests**
+and **16 frontend tests** passed. Backend Ruff lint/format checks, frontend ESLint,
+and the production build are included in the validation workflow. E2E testing is
+excluded from this update; no live AWS or model calls are made by these suites.
 
-For coverage, run `npm run test:coverage` in `frontend/` and the pytest-cov command in the [coverage report](docs/coverage-report.md) from `backend/`. HTML and machine-readable reports are generated under each project’s ignored `coverage/` directory.
+Backend tests use pytest/FastAPI TestClient, temporary session databases, mocked
+S3 listings/streams, and model responses. Frontend tests use Node's test runner,
+mocked fetch/local storage, and Vite's JSX loader with React server rendering.
+Component checks cover Markdown tables, safe links, multi-source answers,
+unverified references, pending messages, and composer error/retry state. They do
+not simulate browser interactions. See the [test cases](docs/test_case.md).
 
-Testing uses pytest/FastAPI TestClient with temporary session databases and mocked
-S3/model responses, plus Node tests with mocked fetch/local storage. Coverage
-measures all backend `app/` Python code and frontend JavaScript utilities; React
-JSX screens, CSS, collector code and Terraform are outside those measured scopes.
-No automated browser E2E suite is configured. Separate manual live S3 and model
-tool-calling smoke tests have succeeded; real infrastructure deployment and full
-browser E2E acceptance remain unverified. See the [feature-wise matrix](docs/test_case.md)
-for methods and statuses and [coverage report](docs/coverage-report.md) for measured
-percentages. Ordinary tests make no automatic live model call.
+For coverage, run `npm run test:coverage` in `frontend/` and the pytest-cov command
+in the [coverage report](docs/coverage.md) from `backend/`. JSX rendering is
+tested separately; frontend coverage percentages cover `src/**/*.js` utilities,
+not whole-UI coverage. Latest coverage: backend lines **90.69%**, branches
+**85.71%**; frontend utilities lines **84.61%**, branches **81.89%**.
+
+## Frontend modules
+
+`main.jsx` mounts the login gate and application. `App.jsx` owns workspace state,
+request coordination, attachments, and theme preferences. Components receive
+state and actions through props:
+
+| Module | Responsibility |
+| --- | --- |
+| `components/Markdown.jsx` | React Markdown and GFM tables, safe external links, scrollable tables |
+| `components/Answer.jsx` | Source URIs, Markdown answers, resource references and evidence |
+| `components/Conversation.jsx` | Welcome suggestions, message list and loading state |
+| `components/ChatComposer.jsx` | Question input, attachments, submit state and retry errors |
+| `components/ChatHeader.jsx` | Workspace header, sidebar and theme controls |
+| `components/InfrastructureSidebar.jsx` | Optional inventory navigation, connection and account controls |
+| `components/ResourceDrawer.jsx` | Optional resource details, focus cleanup and attachment action |
+| `api.js`, `auth.js`, `resources.js` | HTTP requests, session storage and response validation |
+
+The regional resource map has been removed. Markdown answers are rendered using
+`react-markdown` and `remark-gfm`; the system prompt requests tables for resource
+inventories, findings, recommendations, and comparisons. The default chat reads
+S3 evidence; optional inventory/detail integrations still require their own APIs.
 
 ## Project layout
 
 ```text
 backend/app/
-  main.py                 # FastAPI, auth middleware, CORS, error handling, logs
+  main.py                 # FastAPI, auth middleware, CORS, errors and logs
   api/                    # Routes and Pydantic contracts
-  core/                   # Environment settings and JWT/session persistence
+  core/                   # Environment settings and persistent JWT sessions
   service/agent/          # Recon orchestrator and placeholder agent
-  service/llm/base/       # LangChain model client
-  service/llm/role/       # Editable cloud analyst system prompt and loader
-  service/llm/workflow/   # Recon and S3 tool-calling workflows
-  service/tools/          # call_s3 tool, recon registry and deny-all policy
-  service/provide/aws/    # boto3 bucket checks and bounded object reads
-backend/tests/            # API, auth, AWS, workflow and policy checks
-frontend/src/             # Login, session storage, explorer and chat UI
-frontend/tests/           # Auth persistence and cloud contract checks
-cloud-assets/             # Terraform, AWS snapshot collector running every 5 minutes and deployment guide
+  service/llm/            # Model client, system prompt and workflows
+  service/tools/          # S3 read tool, recon registry and policy
+  service/provide/aws/    # Bounded object reads and latest-three prefix selection
+backend/tests/            # Unit and API/workflow integration checks
+frontend/src/
+  main.jsx                # Application entry point
+  App.jsx                 # Workspace state and request coordination
+  components/             # Chat, Markdown, navigation and resource views
+  Login.jsx               # Login/session gate
+  api.js                  # Backend API client
+  auth.js                 # Browser session persistence
+  resources.js            # Response contracts and identity helpers
+  style.css               # Shared responsive and theme styles
+frontend/tests/           # Unit, component rendering and contract integration tests
+cloud-assets/             # Terraform and scheduled AWS snapshot collector
 ```
 
 ## Current limitations and roadmap

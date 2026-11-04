@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 def create_call_s3_tool(settings: Settings):
     @tool
     async def call_s3() -> str:
-        """Read AWS evidence from S3. In history mode returns the latest JSON snapshot
-        per UTC day for today and previous days, with source dates and missing dates."""
+        """Read AWS evidence from S3. With a configured prefix, returns up to three newest JSON files
+        by S3 LastModified, including their sources and modification timestamps."""
 
         def read():
             provider = Aws(settings=settings)

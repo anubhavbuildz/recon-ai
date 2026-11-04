@@ -1,8 +1,7 @@
 """AWS client and S3 bucket setup helpers."""
 
 import json
-import re
-from datetime import datetime, timedelta, timezone
+from datetime import timezone
 
 import boto3
 
@@ -70,54 +69,44 @@ class Aws:
         finally:
             body.close()
 
-    def read_snapshot_history(self, now: datetime | None = None) -> str:
-        """Read the latest JSON snapshot per UTC day in a bounded history window."""
+    def read_snapshot_history(self) -> str:
+        """Read up to three newest JSON objects recursively under the prefix."""
         if not self.settings.s3_bucket_name or not self.settings.s3_snapshot_prefix:
             raise ValueError("Configure S3_BUCKET_NAME and S3_SNAPSHOT_PREFIX")
-        now = now or datetime.now(timezone.utc)
-        today = now.astimezone(timezone.utc).date()
-        prefix = self.settings.s3_snapshot_prefix.rstrip("/") + "/"
+        prefix = self.settings.s3_snapshot_prefix
+        latest = []
+        paginator = self.aws_client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(
+            Bucket=self.settings.s3_bucket_name, Prefix=prefix
+        ):
+            for item in page.get("Contents", []):
+                key = item["Key"]
+                if key.startswith(prefix) and key.lower().endswith(".json"):
+                    latest.append((item["LastModified"], key))
+                    latest.sort(reverse=True)
+                    del latest[3:]
+        if not latest:
+            raise ValueError("No snapshots found under the configured prefix")
         snapshots = []
-        missing_dates = []
         remaining = self.settings.s3_max_bytes
-        for offset in range(self.settings.s3_history_days):
-            day = today - timedelta(days=offset)
-            daily_prefix = f"{prefix}{day:%Y/%m/%d}/"
-            latest = None
-            paginator = self.aws_client.get_paginator("list_objects_v2")
-            for page in paginator.paginate(
-                Bucket=self.settings.s3_bucket_name, Prefix=daily_prefix
-            ):
-                for item in page.get("Contents", []):
-                    key = item["Key"]
-                    if key.startswith(daily_prefix) and re.fullmatch(
-                        r"\d{8}T\d{6}Z\.json", key[len(daily_prefix) :]
-                    ):
-                        if latest is None or key > latest:
-                            latest = key
-            if latest is None:
-                missing_dates.append(day.isoformat())
-                continue
-            text = self._read_text(latest, remaining)
+        for modified, key in latest:
+            text = self._read_text(key, remaining)
             remaining -= len(text.encode("utf-8"))
             data = json.loads(text)
             if not isinstance(data, dict):
                 raise ValueError("Snapshot must be a JSON object")
             snapshots.append(
                 {
-                    "snapshot_date": day.isoformat(),
-                    "source": f"s3://{self.settings.s3_bucket_name}/{latest}",
+                    "last_modified": modified.astimezone(timezone.utc).isoformat(),
+                    "source": f"s3://{self.settings.s3_bucket_name}/{key}",
                     "data": data,
                 }
             )
-        if not snapshots:
-            raise ValueError("No snapshots found in the configured date window")
         result = json.dumps(
             {
                 "timezone": "UTC",
-                "selection": "Latest snapshot per day, not every 5-minute sample",
+                "selection": "Up to three newest JSON files by S3 LastModified, newest first",
                 "snapshots": snapshots,
-                "missing_dates": missing_dates,
             },
             ensure_ascii=False,
         )

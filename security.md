@@ -1,8 +1,37 @@
 # Security policy
 
+## MVP status and version-two security roadmap
+
+Recon AI is an MVP built as part of the **Meta Global Hackathon**. It demonstrates
+snapshot-backed cloud analysis and is not production-ready. Security
+considerations remain incomplete; existing authentication, bounded S3 reads and
+tool-call validation do not constitute a comprehensive security architecture.
+
+The following controls are **not implemented** and are planned for version two:
+
+- An LLM firewall for inspecting prompts, retrieved evidence, tool requests and
+  outputs, including prompt-injection and data-exfiltration defenses.
+- Confidence-based output with evidence-quality checks, calibrated uncertainty,
+  and abstention or escalation when evidence is insufficient. Model-reported
+  confidence alone will not be treated as a reliable security control.
+- Sensitive-data detection and redaction before evidence reaches the model,
+  plus output validation for unintended disclosure.
+- Stronger identity and session controls: expiry, MFA, per-user authorization,
+  tenant isolation and more secure token handling.
+- Login/API rate limiting, concurrency limits and model cost controls.
+- Structured audit trails, security monitoring, adversarial evaluations,
+  dependency scanning and production deployment hardening.
+- Human approval and explicit policy checks before any future write-capable
+  cloud actions; the current application only reads evidence.
+
+These are planned improvements, not guarantees or protections available in the
+MVP. Prompt instructions alone do not prevent injection, hallucinations or
+sensitive-data disclosure. Do not treat generated recommendations as validated
+changes or deploy this MVP as a production security boundary.
+
 ## Implemented scope
 
-Recon AI supports single-account JWT login and authenticated model chat using one configured S3 document. Chat reads the document and sends it, with the user's question, to the configured LLM provider. It does not modify AWS resources. The separate reconnaissance API returns `not_executed` and performs no scanning, DNS lookup, or outbound request to submitted targets. Agents have no shell execution capability.
+Recon AI supports single-account JWT login and authenticated model chat using a configured S3 document or up to three newest JSON snapshots under a configured prefix. Chat reads the document and sends it, with the user's question, to the configured LLM provider. It does not modify AWS resources. The separate reconnaissance API returns `not_executed` and performs no scanning, DNS lookup, or outbound request to submitted targets. Agents have no shell execution capability.
 
 ## Authentication and sessions
 
@@ -16,7 +45,7 @@ Recon AI supports single-account JWT login and authenticated model chat using on
 
 ## S3 and model boundaries
 
-The only enabled execution tool is `service/tools/call_s3.py`. It accepts no arguments and reads the bucket/key fixed by backend settings, or date-scoped JSON files under the configured snapshot prefix. History mode lists the last 1–14 UTC days and reads the latest snapshot per day with a combined context size limit. It requires scoped ListBucket permission alongside GetObject. AWS authorization comes from the SDK credential chain and IAM/bucket policies. Grant only the permissions required for the configured object; the separate bucket helper also performs a bucket access check. Never grant write access solely for this feature.
+The only enabled execution tool is `service/tools/call_s3.py`. It accepts no arguments and reads the bucket/key fixed by backend settings, or JSON files under the configured snapshot prefix. Prefix mode follows paginated listings recursively and reads up to three newest JSON files by S3 LastModified with a combined context size limit. The files may all be from the same day; S3_HISTORY_DAYS no longer controls selection. It requires scoped ListBucket permission alongside GetObject. AWS authorization comes from the SDK credential chain and IAM/bucket policies. Grant only the permissions required for the configured object; the separate bucket helper also performs a bucket access check. Never grant write access solely for this feature.
 
 The S3 reader bounds content size using `S3_MAX_BYTES`, rejects empty or invalid UTF-8 documents, and closes response streams. It performs no writes or bucket creation. The workflow validates one known tool request with empty arguments, returns a matching LangChain `ToolMessage`, and rejects further tool requests during the final model turn. There are at most two model turns per chat request.
 
