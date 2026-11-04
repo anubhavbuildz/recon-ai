@@ -2,6 +2,7 @@
 
 | Guide | Contents |
 | --- | --- |
+| [Features and limitations](feature.md) | Current MVP capabilities, environment-based configuration, database and regional limitations |
 | [Demo setup](demo.md) | Local application setup, AWS collector deployment, optional EC2/RDS resources, validation and cleanup |
 | [Architecture](architecture.md) | Current runtime components, authentication, model/tool exchange, history selection and boundaries |
 | [Current diagrams](diagrams/README.md) | Mermaid diagrams of deployed-by-Terraform resources and application flows |
